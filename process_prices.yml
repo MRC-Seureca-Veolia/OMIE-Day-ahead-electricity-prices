@@ -1,0 +1,60 @@
+name: Process OMIE Data
+
+on:
+  schedule:
+    - cron: '30 18 * * *'  # every day at 18:30 UTC (20:30 Spain time)
+  workflow_dispatch:
+
+jobs:
+  convert_to_parquet:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: ⬇️ Checkout repo
+        uses: actions/checkout@v3
+
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: 📦 Install dependencies
+        run: |
+          pip install pandas pyarrow
+
+      - name: 🧪 Convert new files to Parquet
+        run: |
+          import os
+          import pandas as pd
+          from pathlib import Path
+
+          data_dir = Path("data")
+          output_dir = Path("processed")
+          output_dir.mkdir(exist_ok=True)
+
+          all_dfs = []
+
+          for file in sorted(data_dir.glob("marginalpdbc_*.1")):
+              try:
+                  df = pd.read_csv(file, sep=";", encoding="latin1", skiprows=1)
+                  df["source_file"] = file.name
+                  all_dfs.append(df)
+              except Exception as e:
+                  print(f"⚠️ Could not read {file}: {e}")
+
+          if all_dfs:
+              full_df = pd.concat(all_dfs, ignore_index=True)
+              full_df.to_parquet(output_dir / "prices.parquet", index=False)
+              print("✅ Parquet file created")
+          else:
+              print("ℹ️ No new data to process")
+
+        shell: python
+
+      - name: 💾 Commit & Push parquet
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add processed/prices.parquet
+          git commit -m "🧩 Update master Parquet file" || echo "No changes"
+          git push
