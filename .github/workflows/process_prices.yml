@@ -1,0 +1,34 @@
+name: Process OMIE Prices
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "30 18 * * *"  # Every day at 18:30 UTC (20:30 Spain)
+
+jobs:
+  process:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.10
+
+      - name: Install dependencies
+        run: |
+          pip install pandas duckdb pyarrow
+
+      - name: Run processing script
+        run: python process_prices.py
+
+      - name: Commit processed files
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add processed/
+          git commit -m "🦆 Process and update Parquet/DuckDB" || echo "No changes to commit"
+          git push
