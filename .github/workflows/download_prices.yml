@@ -2,30 +2,34 @@ name: Download OMIE Day-Ahead Price
 
 on:
   schedule:
-    - cron: '0 18 * * *'   # 18:00 UTC (20:00 Spain time)
-    - cron: '0 20 * * *'   # 20:00 UTC (22:00 Spain time)
-    - cron: '0 22 * * *'   # 22:00 UTC (00:00 Spain time)
-  workflow_dispatch:       # Allow manual run from GitHub UI
+    - cron: '0 18 * * *'
+    - cron: '0 20 * * *'
+    - cron: '0 22 * * *'
+  workflow_dispatch:
 
 jobs:
   download:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: 3.11
+          python-version: '3.11'
 
-      - name: Run download script
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Run script
         run: python download_tomorrow.py
 
       - name: Commit & push if file was downloaded
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
-          git add data/
+          git add .
           git commit -m "📥 Add OMIE data for tomorrow" || echo "No changes to commit"
           git push
