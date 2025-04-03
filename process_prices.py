@@ -12,6 +12,10 @@ files = glob(os.path.join(folder_path, "*.1")) + glob(os.path.join(folder_path, 
 def clean_omie_file(filepath):
     try:
         df = pd.read_csv(filepath, sep=";", skiprows=1, header=None)
+        
+        # Remove rows where any column contains '*'
+        df = df[~df.apply(lambda x: x.astype(str).str.contains('\*').any(), axis=1)]
+        
         df = df.drop(columns=[6])  # drop last column with '*'
         df.columns = ["Year", "Month", "Day", "Hour", "Price1", "Price2"]
         df["Datetime"] = pd.to_datetime(df[["Year", "Month", "Day"]]) + pd.to_timedelta(df["Hour"] - 1, unit="h")
