@@ -39,4 +39,4 @@ if all_dfs:
     full_df.to_csv("all_omie_prices.csv", index=False)
     full_df.to_parquet("all_omie_prices.parquet", index=False)
 else:
-    print("⚠️ No valid data loaded.")
+    print("⚠️ No vali
