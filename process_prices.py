@@ -2,41 +2,44 @@ import pandas as pd
 import os
 from glob import glob
 
-# 💾 Folder with your OMIE .1 files (Spain)
-folder_path = "path_to_your_files"  # 👈 Replace with your actual folder
+# 📁 Set your folder path
+folder_path = "path_to_your_files"  # ⬅️ Change this!
 
-# 🔍 Find all .1 files (Spain)
-files = glob(os.path.join(folder_path, "*.1"))
+# 📂 Find all .1 and .2 files
+files = glob(os.path.join(folder_path, "*.1")) + glob(os.path.join(folder_path, "*.2"))
 
-# 🧹 Clean each file
+# 🧹 Cleaning function
 def clean_omie_file(filepath):
     try:
         df = pd.read_csv(filepath, sep=";", skiprows=1, header=None)
-        df = df.drop(columns=[6])  # Remove last column
+        df = df.drop(columns=[6])  # drop last column
         df.columns = ["Year", "Month", "Day", "Hour", "Price1", "Price2"]
         df["Datetime"] = pd.to_datetime(df[["Year", "Month", "Day"]]) + pd.to_timedelta(df["Hour"] - 1, unit="h")
         df["Filename"] = os.path.basename(filepath)
-        df["Price"] = df["Price1"]  # 👈 Spain price
-        return df[["Datetime", "Price", "Filename"]]
+        df["Country"] = "Spain" if filepath.endswith(".1") else "Portugal"
+        df["Price"] = df["Price1"]  # we use Price1 for consistency
+        return df[["Datetime", "Price", "Country", "Filename"]]
     except Exception as e:
-        print(f"❌ Error in file {filepath}: {e}")
+        print(f"❌ Error in {filepath}: {e}")
         return None
 
-# 📦 Load all files
+# 📦 Load all
 all_dfs = []
 for f in files:
-    df = clean_omie_file(f)
-    if df is not None:
-        all_dfs.append(df)
+    cleaned = clean_omie_file(f)
+    if cleaned is not None:
+        all_dfs.append(cleaned)
 
-# 🧬 Combine and export
+# 🧬 Final dataset
 if all_dfs:
-    full_df = pd.concat(all_dfs, ignore_index=True).sort_values("Datetime")
+    df_all = pd.concat(all_dfs).sort_values("Datetime").reset_index(drop=True)
+    df_spain = df_all[df_all["Country"] == "Spain"]  # 🇪🇸 filter Spain
+
     print("✅ Spain data loaded!")
-    print(full_df.head())
+    print(df_spain.head())
 
     # 💾 Save
-    full_df.to_csv("spain_prices.csv", index=False)
-    full_df.to_parquet("spain_prices.parquet", index=False)
+    df_spain.to_csv("spain_prices.csv", index=False)
+    df_spain.to_parquet("spain_prices.parquet", index=False)
 else:
-    print("⚠️ No valid Spain data files found.")
+    print("⚠️ No valid data found.")
