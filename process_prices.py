@@ -1,54 +1,42 @@
-import os
 import pandas as pd
-import duckdb
-from datetime import datetime
+import os
+from glob import glob
 
-data_folder = "data"
-processed_folder = "processed"
-os.makedirs(processed_folder, exist_ok=True)
+# 💾 Set the folder where all your .1 price files are stored
+folder_path = "path_to_your_files"  # ← replace this with your folder path
 
-all_data = []
+# 🔍 Find all .1 files (daily price files from OMIE)
+files = glob(os.path.join(folder_path, "*.1"))
 
-for filename in sorted(os.listdir(data_folder)):
-    if filename.endswith(".1") or filename.endswith(".2"):
-        file_path = os.path.join(data_folder, filename)
+# 🧹 Function to clean one file
+def clean_omie_file(filepath):
+    try:
+        df = pd.read_csv(filepath, sep=";", skiprows=1, header=None)
+        df = df.drop(columns=[6])  # remove last column
+        df.columns = ["Year", "Month", "Day", "Hour", "Price1", "Price2"]
+        df["Datetime"] = pd.to_datetime(df[["Year", "Month", "Day"]]) + pd.to_timedelta(df["Hour"] - 1, unit="h")
+        df["Filename"] = os.path.basename(filepath)
+        return df
+    except Exception as e:
+        print(f"❌ Error in file {filepath}: {e}")
+        return None
 
-        try:
-            # Skip header row and read with semicolon separator
-            df = pd.read_csv(file_path, sep=";", header=None, skiprows=1, encoding="latin1")
+# 📦 Load and clean all files
+all_dfs = []
+for f in files:
+    cleaned_df = clean_omie_file(f)
+    if cleaned_df is not None:
+        all_dfs.append(cleaned_df)
 
-            if df.shape[1] < 6:
-                print(f"⚠️ Skipping {filename} - unexpected format")
-                continue
+# 🧬 Combine into one big DataFrame
+if all_dfs:
+    full_df = pd.concat(all_dfs, ignore_index=True)
+    full_df = full_df.sort_values("Datetime").reset_index(drop=True)
+    print("✅ Data loaded successfully!")
+    print(full_df.head())
 
-            df.columns = ["year", "month", "day", "hour", "price", "price_dup"]
-            df = df[["year", "month", "day", "hour", "price"]]  # Drop duplicate price
-
-            # Create a proper date column
-            df["date"] = pd.to_datetime(df[["year", "month", "day"]])
-
-            # Reorder columns
-            df = df[["date", "hour", "price"]]
-            df["source_file"] = filename
-
-            all_data.append(df)
-
-        except Exception as e:
-            print(f"⚠️ Failed to parse {filename}: {e}")
-
-# Combine and export
-if all_data:
-    combined_df = pd.concat(all_data, ignore_index=True)
-
-    # Save Parquet
-    combined_df.to_parquet(os.path.join(processed_folder, "prices.parquet"), index=False)
-
-    # Save DuckDB
-    con = duckdb.connect(os.path.join(processed_folder, "prices.duckdb"))
-    con.execute("DROP TABLE IF EXISTS prices")
-    con.execute("CREATE TABLE prices AS SELECT * FROM combined_df")
-    con.close()
-
-    print("✅ Done! Clean and tidy prices saved.")
+    # 💾 Optional: save to CSV or Parquet
+    full_df.to_csv("all_omie_prices.csv", index=False)
+    full_df.to_parquet("all_omie_prices.parquet", index=False)
 else:
-    print("🚫 No data processed.")
+    print("⚠️ No valid data loaded.")
