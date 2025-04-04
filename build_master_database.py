@@ -35,16 +35,23 @@ if all_data:
     full_df = full_df.sort_values(["Datetime", "Country"]).reset_index(drop=True)
 
     # Save to CSV
-    full_df.to_csv(os.path.join(output_folder, "all_omie_prices.csv"), index=False)
+    csv_path = os.path.join(output_folder, "all_omie_prices.csv")
+    full_df.to_csv(csv_path, index=False)
+    print(f"✅ CSV saved to {csv_path}")
 
     # Save to Parquet
-    full_df.to_parquet(os.path.join(output_folder, "all_omie_prices.parquet"), index=False)
+    parquet_path = os.path.join(output_folder, "all_omie_prices.parquet")
+    full_df.to_parquet(parquet_path, index=False)
+    print(f"✅ Parquet saved to {parquet_path}")
 
     # Save to DuckDB
-    con = duckdb.connect(os.path.join(output_folder, "omie_prices.duckdb"))
+    duckdb_path = os.path.join(output_folder, "omie_prices.duckdb")
+    con = duckdb.connect(duckdb_path)
+    con.register("df_view", full_df)  # Register dataframe so DuckDB can access it
     con.execute("DROP TABLE IF EXISTS prices")
-    con.execute("CREATE TABLE prices AS SELECT * FROM full_df")
+    con.execute("CREATE TABLE prices AS SELECT * FROM df_view")
     con.close()
+    print(f"✅ DuckDB saved to {duckdb_path}")
 
     print("✅ Historical database built successfully!")
 
