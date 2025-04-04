@@ -34,14 +34,13 @@ jobs:
         run: |
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@github.com"
-          
-          # Show files for debugging
-          echo "🔍 Files in processed/:"
-          ls -l processed/
 
+          git pull --rebase origin main  # 👈 Pull first with rebase to avoid conflicts
+          
           git add processed/*.parquet processed/*.csv processed/*.duckdb || echo "No new files to add"
           git commit -m "📊 Update processed data files" || echo "No changes to commit"
           git push || echo "Nothing to push"
+
 
           
 
