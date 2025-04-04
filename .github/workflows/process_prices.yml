@@ -29,3 +29,11 @@ jobs:
 
       - name: Append new day to database
         run: python append_new_day.py
+
+      - name: Push processed files to GitHub 🚀
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add processed/*
+          git commit -m "📊 Update processed files"
+          git push || echo "No changes to commit"
