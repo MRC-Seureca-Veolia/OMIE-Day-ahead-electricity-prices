@@ -34,12 +34,14 @@ jobs:
         run: |
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@github.com"
-
-          git pull --rebase origin main  # 👈 Pull first with rebase to avoid conflicts
           
-          git add processed/*.parquet processed/*.csv processed/*.duckdb || echo "No new files to add"
-          git commit -m "📊 Update processed data files" || echo "No changes to commit"
-          git push || echo "Nothing to push"
+          git pull --rebase origin main || echo "🔁 Nothing to pull"
+          
+          git add processed/*.parquet processed/*.csv processed/*.duckdb || echo "🟡 No files to stage"
+          git commit -m "📊 Update processed data" || echo "🟡 Nothing to commit"
+          
+          git push origin main || echo "🟡 Nothing to push (already up to date)"
+
 
 
           
