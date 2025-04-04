@@ -2,11 +2,14 @@ name: Download and Process OMIE Prices
 
 on:
   schedule:
-    - cron: '0 6 * * *'  # Run daily at 6:00 UTC (8:00 CEST approx)
-  workflow_dispatch:      # Allow manual runs
+    - cron: '0 18 * * *'
+    - cron: '0 20 * * *'
+    - cron: '0 22 * * *'
+    - cron: '0 23 * * *'  # ⏰ Final fallback — run `append_new_day.py`
+  workflow_dispatch:
 
 jobs:
-  download-and-process:
+  run-scripts:
     runs-on: ubuntu-latest
 
     steps:
@@ -19,19 +22,10 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install pandas duckdb requests
+        run: pip install pandas duckdb requests pyarrow
 
-
-      - name: Run download script
+      - name: Download OMIE data
         run: python download_tomorrow.py
 
-      - name: Append to database
+      - name: Append new day to database
         run: python append_new_day.py
-
-      - name: Commit & Push
-        run: |
-          git config user.name github-actions
-          git config user.email github-actions@github.com
-          git add .
-          git commit -m "📊 Update OMIE database with new prices" || echo "No changes to commit"
-          git push
