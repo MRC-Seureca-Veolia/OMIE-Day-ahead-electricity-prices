@@ -3,16 +3,17 @@ import sys
 import pandas as pd
 import duckdb
 
-# 🔧 Define paths
+# 🔧 Paths
 new_file = "data/MARGINALPDBC.1"
-output_folder = "data"  # or wherever your parquet/duckdb are stored
+output_folder = "processed"
+os.makedirs(output_folder, exist_ok=True)
 
-# 🛑 Check if the new file exists
+# 🚫 Skip if no new file
 if not os.path.exists(new_file):
     print(f"⚠️ No new file found at {new_file}. Skipping append.")
     sys.exit(0)
 
-# 🧼 Cleaning function
+# 🧼 Clean function
 def clean_file(filepath):
     df = pd.read_csv(filepath, sep=";", skiprows=1, header=None)
     df = df[~df.apply(lambda x: x.astype(str).str.contains(r'\*').any(), axis=1)]
@@ -25,27 +26,32 @@ def clean_file(filepath):
 # ✅ Clean new file
 new_df = clean_file(new_file)
 
-# 📁 Load existing Parquet data
+# 📁 Parquet
 parquet_path = os.path.join(output_folder, "all_omie_prices.parquet")
 if os.path.exists(parquet_path):
     existing = pd.read_parquet(parquet_path)
     combined = pd.concat([existing, new_df]).drop_duplicates(subset=["Datetime", "Country"]).sort_values(["Datetime", "Country"])
 else:
-    combined = new_df  # If no existing file
+    combined = new_df
 
-# 💾 Save to Parquet
+# 💾 Save updated Parquet
 combined.to_parquet(parquet_path, index=False)
 
-# 🐤 Save to DuckDB
+# 🦆 DuckDB
 duckdb_path = os.path.join(output_folder, "omie_prices.duckdb")
 con = duckdb.connect(duckdb_path)
 
-# Create table if not exists
+# Ensure table exists
+con.execute("CREATE TABLE IF NOT EXISTS prices AS SELECT * FROM combined LIMIT 0")
+
+# Only insert new rows
 con.execute("""
-CREATE TABLE IF NOT EXISTS prices AS SELECT * FROM combined LIMIT 0
+    INSERT INTO prices
+    SELECT * FROM combined
+    EXCEPT
+    SELECT * FROM prices
 """)
-# Append the new data
-con.execute("INSERT INTO prices SELECT * FROM combined")
+
 con.close()
 
-print("✅ Successfully appended new data to Parquet and DuckDB.")
+print("✅ New data appended to Parquet and DuckDB.")
