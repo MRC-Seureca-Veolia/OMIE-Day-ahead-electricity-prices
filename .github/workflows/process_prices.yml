@@ -19,7 +19,8 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install pandas duckdb
+        run: pip install pandas duckdb requests
+
 
       - name: Run download script
         run: python download_tomorrow.py
