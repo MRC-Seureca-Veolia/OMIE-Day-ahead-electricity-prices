@@ -26,7 +26,7 @@ def clean_file(filepath):
 # ✅ Clean new file
 new_df = clean_file(new_file)
 
-# 📁 Parquet
+# 📁 Parquet logic
 parquet_path = os.path.join(output_folder, "all_omie_prices.parquet")
 if os.path.exists(parquet_path):
     existing = pd.read_parquet(parquet_path)
@@ -36,22 +36,29 @@ else:
 
 # 💾 Save updated Parquet
 combined.to_parquet(parquet_path, index=False)
+print(f"✅ Parquet updated: {parquet_path}")
 
-# 🦆 DuckDB
+# 🦆 DuckDB logic
 duckdb_path = os.path.join(output_folder, "omie_prices.duckdb")
 con = duckdb.connect(duckdb_path)
 
-# Ensure table exists
-con.execute("CREATE TABLE IF NOT EXISTS prices AS SELECT * FROM combined LIMIT 0")
+# Register new data as a DuckDB view
+con.register("new_data", new_df)
 
-# Only insert new rows
+# Create table if not exists
+con.execute("""
+    CREATE TABLE IF NOT EXISTS prices AS 
+    SELECT * FROM new_data LIMIT 0
+""")
+
+# Insert only new rows
 con.execute("""
     INSERT INTO prices
-    SELECT * FROM combined
+    SELECT * FROM new_data
     EXCEPT
     SELECT * FROM prices
 """)
 
 con.close()
-
+print(f"✅ DuckDB updated: {duckdb_path}")
 print("✅ New data appended to Parquet and DuckDB.")
