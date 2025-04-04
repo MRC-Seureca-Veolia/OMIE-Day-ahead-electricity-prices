@@ -5,7 +5,7 @@ from glob import glob
 
 # Paths
 input_folder = "data"
-output_folder = "process"
+output_folder = "processed"
 os.makedirs(output_folder, exist_ok=True)
 
 # Function to clean a file
