@@ -30,18 +30,14 @@ jobs:
       - name: Append new day to database
         run: python append_new_day.py
 
-      - name: Commit and push processed files
+      - name: Push processed files to GitHub 🚀
         run: |
-          git config --global user.name "github-actions"
-          git config --global user.email "github-actions@github.com"
-          
-          git pull --rebase origin main || echo "🔁 Nothing to pull"
-          
-          git add processed/*.parquet processed/*.csv processed/*.duckdb || echo "🟡 No files to stage"
-          git commit -m "📊 Update processed data" || echo "🟡 Nothing to commit"
-          
-          git push origin main || echo "🟡 Nothing to push (already up to date)"
-
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git pull --rebase origin main   # ✅ Add this line
+          git add processed/*
+          git commit -m "📊 Update processed files"
+          git push
 
 
           
