@@ -2,11 +2,11 @@ name: Download and Process OMIE Prices
 
 on:
   schedule:
-    - cron: '0 18 * * *'
-    - cron: '0 20 * * *'
-    - cron: '0 22 * * *'
-    - cron: '0 23 * * *'  # ⏰ Final fallback
-  workflow_dispatch:
+    - cron: '0 18 * * *'   # ⏰ Main run after OMIE releases
+    - cron: '0 20 * * *'   # ⏰ Redundant run (failsafe)
+    - cron: '0 22 * * *'   # ⏰ Backup
+    - cron: '0 23 * * *'   # ⏰ Final fallback
+  workflow_dispatch:       # ✅ Allow manual trigger
 
 jobs:
   run-scripts:
@@ -37,7 +37,8 @@ jobs:
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
-          git pull --rebase origin main
+          git reset --hard HEAD                 # 🧼 Clean up local changes
+          git pull --rebase origin main || true
           git add processed/*
-          git commit -m "📊 Update processed files"
-          git push
+          git commit -m "📊 Update processed files" || echo "No changes to commit"
+          git push || echo "Nothing to push"
