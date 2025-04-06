@@ -2,22 +2,27 @@ import os
 import sys
 import pandas as pd
 import duckdb
+from glob import glob
 
 # 📂 Paths
-new_file = "data/MARGINALPDBC.1"
 output_folder = "processed"
+data_folder = "data"
 os.makedirs(output_folder, exist_ok=True)
 
 print("🚀 Starting OMIE append script...")
 
-# 🚫 Skip if no new file
-if not os.path.exists(new_file):
-    print(f"⚠️ No new file found at {new_file}. Skipping append.")
+# 🔍 Find latest .1 or .2 file in data/
+files = sorted(glob(os.path.join(data_folder, "marginalpdbc_*.1")) + glob(os.path.join(data_folder, "marginalpdbc_*.2")), reverse=True)
+
+if not files:
+    print("⚠️ No OMIE data files found. Skipping.")
     sys.exit(0)
+
+new_file = files[0]
+print(f"📄 Using latest file: {new_file}")
 
 # 🧼 Clean function
 def clean_file(filepath):
-    print(f"📂 Cleaning new OMIE file: {filepath}")
     df = pd.read_csv(filepath, sep=";", skiprows=1, header=None)
     df = df[~df.apply(lambda x: x.astype(str).str.contains(r'\*').any(), axis=1)]
     df = df.drop(columns=[6])
@@ -29,7 +34,7 @@ def clean_file(filepath):
 # ✅ Clean and prepare
 new_df = clean_file(new_file)
 
-# 🧠 Combine with existing Parquet data
+# 🧠 Remove duplicates based on Datetime + Country
 parquet_path = os.path.join(output_folder, "all_omie_prices.parquet")
 if os.path.exists(parquet_path):
     existing = pd.read_parquet(parquet_path)
@@ -41,24 +46,33 @@ else:
 # 💾 Save updated Parquet
 combined.to_parquet(parquet_path, index=False)
 print(f"✅ Parquet updated: {parquet_path}")
-
-# 💾 Also save updated CSV
-csv_path = os.path.join(output_folder, "all_omie_prices.csv")
-combined.to_csv(csv_path, index=False)
-print(f"✅ CSV updated: {csv_path}")
+print(f"🕒 Latest timestamp: {combined['Datetime'].max()}")
 
 # 🦆 DuckDB update
 duckdb_path = os.path.join(output_folder, "omie_prices.duckdb")
 con = duckdb.connect(duckdb_path)
 
-# Register updated dataframe
-con.register("updated", combined)
+# Register new data as a DuckDB view
+con.register("new_data", new_df)
 
-# Rebuild entire DuckDB table for safety
-con.execute("DROP TABLE IF EXISTS prices")
-con.execute("CREATE TABLE prices AS SELECT * FROM updated")
+# Create table if not exists
+con.execute("""
+    CREATE TABLE IF NOT EXISTS prices AS 
+    SELECT * FROM new_data LIMIT 0
+""")
+
+# Insert only new rows
+con.execute("""
+    INSERT INTO prices
+    SELECT * FROM new_data
+    EXCEPT
+    SELECT * FROM prices
+""")
+
 con.close()
-print(f"✅ DuckDB rebuilt: {duckdb_path}")
+print(f"✅ DuckDB updated: {duckdb_path}")
+print("🎉 New data appended to both Parquet and DuckDB.")
+
 
 # ✅ Summary
 print(f"🎉 OMIE data appended and exported to Parquet, CSV, and DuckDB!")
