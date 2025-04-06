@@ -2,11 +2,11 @@ name: Download and Process OMIE Prices
 
 on:
   schedule:
-    - cron: '0 18 * * *'
-    - cron: '0 20 * * *'
-    - cron: '0 22 * * *'
-    - cron: '0 23 * * *'
-  workflow_dispatch:
+    - cron: '0 18 * * *'   # Main run after OMIE releases
+    - cron: '0 20 * * *'   # Redundant run
+    - cron: '0 22 * * *'   # Backup
+    - cron: '0 23 * * *'   # Final fallback
+  workflow_dispatch:       # Manual trigger allowed
 
 jobs:
   run-scripts:
@@ -24,10 +24,11 @@ jobs:
       - name: 📦 Install dependencies
         run: pip install pandas duckdb requests pyarrow
 
-      - name: 📅 Download OMIE data (try .1 then .2)
+      - name: 📅 Download OMIE data (.1 then .2)
         run: python download_tomorrow.py
 
       - name: 🧠 Select best OMIE file (prefer .2 over .1)
+        shell: bash
         run: |
           FILE=$(ls -t data/marginalpdbc_*.2 data/marginalpdbc_*.1 2>/dev/null | head -n 1)
           echo "✅ Using file: $FILE"
@@ -36,13 +37,13 @@ jobs:
       - name: ➕ Append new day to database
         run: python append_new_day.py
 
-      - name: 🔁 Show latest date in DB
+      - name: 🔁 Show latest date in database
         run: |
           pip install pandas
           python -c "
 import pandas as pd
 df = pd.read_parquet('processed/all_omie_prices.parquet')
-print('🕒 Latest in DB:', df['Datetime'].max())
+print('🕒 Latest in database:', df['Datetime'].max())
 "
 
       - name: 🚀 Push processed files to GitHub
