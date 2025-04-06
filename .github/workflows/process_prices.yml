@@ -27,16 +27,10 @@ jobs:
       - name: 🧲 Download OMIE data (.1 then .2)
         run: python download_tomorrow.py
 
-      - name: 🧠 Select best file and rename
-        run: |
-          FILE=$(ls -t data/marginalpdbc_*.2 data/marginalpdbc_*.1 2>/dev/null | head -n 1)
-          echo "📄 Using file: $FILE"
-          cp "$FILE" data/MARGINALPDBC.1
-
       - name: ➕ Append new day to database
         run: python append_new_day.py
 
-      - name: 💾 Show latest timestamp
+      - name: 🕒 Show latest timestamp in DB
         run: |
           python -c "import pandas as pd; df = pd.read_parquet('processed/all_omie_prices.parquet'); print('🕒 Latest in DB:', df['Datetime'].max())"
 
@@ -46,6 +40,5 @@ jobs:
           git config user.email "github-actions@github.com"
           git pull --rebase origin main || true
           git add -A
-          git commit -m "📊 Update OMIE processed files" || echo "Nothing to commit"
-          git push || echo "Nothing to push"
-
+          git commit -m '📊 Update OMIE processed files' || echo 'Nothing to commit'
+          git push || echo 'Nothing to push'
