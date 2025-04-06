@@ -2,11 +2,11 @@ name: Download and Process OMIE Prices
 
 on:
   schedule:
-    - cron: '0 18 * * *'   # Main run after OMIE releases
-    - cron: '0 20 * * *'   # Redundant run
-    - cron: '0 22 * * *'   # Backup
-    - cron: '0 23 * * *'   # Final fallback
-  workflow_dispatch:       # Manual trigger allowed
+    - cron: '0 18 * * *'
+    - cron: '0 20 * * *'
+    - cron: '0 22 * * *'
+    - cron: '0 23 * * *'
+  workflow_dispatch:
 
 jobs:
   run-scripts:
@@ -22,35 +22,33 @@ jobs:
           python-version: '3.11'
 
       - name: 📦 Install dependencies
-        run: pip install pandas duckdb requests pyarrow
+        run: |
+          pip install pandas duckdb requests pyarrow
 
       - name: 📅 Download OMIE data (.1 then .2)
-        run: python download_tomorrow.py
+        run: |
+          python download_tomorrow.py
 
       - name: 🧠 Select best OMIE file (prefer .2 over .1)
-        shell: bash
         run: |
+          echo "🔍 Searching for latest marginalpdbc .2 or .1 file"
           FILE=$(ls -t data/marginalpdbc_*.2 data/marginalpdbc_*.1 2>/dev/null | head -n 1)
           echo "✅ Using file: $FILE"
           cp "$FILE" data/MARGINALPDBC.1
 
       - name: ➕ Append new day to database
-        run: python append_new_day.py
+        run: |
+          python append_new_day.py
 
       - name: 🔁 Show latest date in database
         run: |
           pip install pandas
-          python -c "
-import pandas as pd
-df = pd.read_parquet('processed/all_omie_prices.parquet')
-print('🕒 Latest in database:', df['Datetime'].max())
-"
+          python -c "import pandas as pd; df = pd.read_parquet('processed/all_omie_prices.parquet'); print('🕒 Latest in database:', df['Datetime'].max())"
 
       - name: 🚀 Push processed files to GitHub
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
-          git reset --hard HEAD
           git pull --rebase origin main || true
           git add processed/*
           git commit -m '📊 Update OMIE processed files' || echo 'No changes to commit'
