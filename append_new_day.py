@@ -1,79 +1,70 @@
 import os
-import sys
 import pandas as pd
 import duckdb
 from glob import glob
 
-data_folder = "data"
-output_folder = "processed"
-os.makedirs(output_folder, exist_ok=True)
+# 📁 Paths
+DATA_DIR = "data"
+OUTPUT_DIR = "processed"
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-print("🚀 Running append_new_day.py")
-
-# 🔍 Find newest .1 or .2 file
-files = sorted(
-    glob(os.path.join(data_folder, "marginalpdbc_*.1")) +
-    glob(os.path.join(data_folder, "marginalpdbc_*.2")),
-    reverse=True
-)
-
-if not files:
-    print("❌ No new OMIE files found in data/")
-    sys.exit(0)
-
-new_file = files[0]
-print(f"📄 Found file: {new_file}")
+parquet_path = os.path.join(OUTPUT_DIR, "all_omie_prices.parquet")
+csv_path = os.path.join(OUTPUT_DIR, "all_omie_prices.csv")
+duckdb_path = os.path.join(OUTPUT_DIR, "omie_prices.duckdb")
 
 # 🧼 Cleaning function
 def clean_file(filepath):
     df = pd.read_csv(filepath, sep=";", skiprows=1, header=None)
-    df = df[~df.apply(lambda x: x.astype(str).str.contains(r"\*").any(), axis=1)]
+    df = df[~df.apply(lambda x: x.astype(str).str.contains(r'\*').any(), axis=1)]
     df = df.drop(columns=[6])
     df.columns = ["Year", "Month", "Day", "Hour", "Price1", "Price2"]
     df["Datetime"] = pd.to_datetime(df[["Year", "Month", "Day"]]) + pd.to_timedelta(df["Hour"] - 1, unit="h")
     df["Country"] = "Spain" if filepath.endswith(".1") else "Portugal"
     return df
 
-# 🆕 Cleaned new data
-new_df = clean_file(new_file)
-print(f"🆕 New rows: {len(new_df)} | Date range: {new_df['Datetime'].min()} → {new_df['Datetime'].max()}")
-
-# 📦 Parquet merging
-parquet_path = os.path.join(output_folder, "all_omie_prices.parquet")
+# 🧠 Load existing DB (if any)
 if os.path.exists(parquet_path):
-    existing_df = pd.read_parquet(parquet_path)
-    print(f"📦 Loaded existing DB: {len(existing_df)} rows")
-    combined = pd.concat([existing_df, new_df], ignore_index=True)
+    existing = pd.read_parquet(parquet_path)
+    existing_dates = set(existing["Datetime"].dt.date)
+else:
+    existing = pd.DataFrame()
+    existing_dates = set()
+
+# 🔍 Look for new files
+files = sorted(glob(os.path.join(DATA_DIR, "marginalpdbc_*.1")) + glob(os.path.join(DATA_DIR, "marginalpdbc_*.2")))
+new_data = []
+
+for file in files:
+    try:
+        df = clean_file(file)
+        file_dates = set(df["Datetime"].dt.date)
+        if file_dates.isdisjoint(existing_dates):
+            print(f"✅ Adding: {os.path.basename(file)}")
+            new_data.append(df)
+        else:
+            print(f"⏭️ Skipping (already in DB): {os.path.basename(file)}")
+    except Exception as e:
+        print(f"⚠️ Error processing {file}: {e}")
+
+# 🧱 Merge and save
+if new_data:
+    all_new = pd.concat(new_data)
+    combined = pd.concat([existing, all_new])
     combined = combined.drop_duplicates(subset=["Datetime", "Country"]).sort_values(["Datetime", "Country"])
+    
+    # 💾 Save everything
+    combined.to_csv(csv_path, index=False)
+    combined.to_parquet(parquet_path, index=False)
+    
+    con = duckdb.connect(duckdb_path)
+    con.execute("DROP TABLE IF EXISTS prices")
+    con.register("df", combined)
+    con.execute("CREATE TABLE prices AS SELECT * FROM df")
+    con.close()
+
+    print("🎉 Database updated with new data!")
 else:
-    combined = new_df.copy()
+    print("🟰 No new data to add. All up to date!")
 
-print(f"📈 Total after merge: {len(combined)} rows")
-
-# 💾 Save all formats
-combined.to_csv(os.path.join(output_folder, "all_omie_prices.csv"), index=False)
-combined.to_parquet(parquet_path, index=False)
-
-# 🦆 Update DuckDB (replace entire table for accuracy)
-duckdb_path = os.path.join(output_folder, "omie_prices.duckdb")
-con = duckdb.connect(duckdb_path)
-con.execute("DROP TABLE IF EXISTS prices")
-con.register("df", combined)
-con.execute("CREATE TABLE prices AS SELECT * FROM df")
-con.close()
-
-# ✅ Check latest entry
-print(f"✅ Latest date in database: {combined['Datetime'].max()}")
-
-# 🔍 Sanity check for continuity
-expected = pd.date_range(combined["Datetime"].min(), combined["Datetime"].max(), freq="H")
-missing = expected.difference(combined["Datetime"].sort_values().drop_duplicates())
-
-if missing.empty:
-    print("✅ No gaps. Timestamps are continuous.")
-else:
-    print("⚠️ Missing timestamps:")
-    for ts in missing:
-        print(f"   ⏳ {ts}")
 
 
