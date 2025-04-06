@@ -2,43 +2,55 @@ name: Download and Process OMIE Prices
 
 on:
   schedule:
-    - cron: '0 18 * * *'   # ⏰ Main run after OMIE releases
-    - cron: '0 20 * * *'   # ⏰ Redundant run (failsafe)
-    - cron: '0 22 * * *'   # ⏰ Backup
-    - cron: '0 23 * * *'   # ⏰ Final fallback
-  workflow_dispatch:       # ✅ Allow manual trigger
+    - cron: '0 18 * * *'
+    - cron: '0 20 * * *'
+    - cron: '0 22 * * *'
+    - cron: '0 23 * * *'
+  workflow_dispatch:
 
 jobs:
   run-scripts:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
+      - name: 📥 Checkout repo
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: 🐍 Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
 
-      - name: Install dependencies
+      - name: 📦 Install dependencies
         run: pip install pandas duckdb requests pyarrow
 
-      - name: Download OMIE data
+      - name: 📅 Download OMIE data (try .1 then .2)
         run: python download_tomorrow.py
 
-      - name: Append new day to database
+      - name: 🧠 Select best OMIE file (prefer .2 over .1)
+        run: |
+          FILE=$(ls -t data/marginalpdbc_*.2 data/marginalpdbc_*.1 2>/dev/null | head -n 1)
+          echo "✅ Using file: $FILE"
+          cp "$FILE" data/MARGINALPDBC.1
+
+      - name: ➕ Append new day to database
         run: python append_new_day.py
 
-      - name: Build database files
-        run: python build_master_database.py
+      - name: 🔁 Show latest date in DB
+        run: |
+          pip install pandas
+          python -c "
+import pandas as pd
+df = pd.read_parquet('processed/all_omie_prices.parquet')
+print('🕒 Latest in DB:', df['Datetime'].max())
+"
 
-      - name: Push processed files to GitHub 🚀
+      - name: 🚀 Push processed files to GitHub
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
-          git reset --hard HEAD                 # 🧼 Clean up local changes
+          git reset --hard HEAD
           git pull --rebase origin main || true
           git add processed/*
-          git commit -m "📊 Update processed files" || echo "No changes to commit"
-          git push || echo "Nothing to push"
+          git commit -m '📊 Update OMIE processed files' || echo 'No changes to commit'
+          git push || echo 'Nothing to push'
