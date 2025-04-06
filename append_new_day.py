@@ -4,14 +4,14 @@ import pandas as pd
 import duckdb
 from glob import glob
 
-# 📁 Paths
+# 📂 Folders
 data_folder = "data"
 output_folder = "processed"
 os.makedirs(output_folder, exist_ok=True)
 
 print("🚀 Starting OMIE append script...")
 
-# 🔍 Find the newest .1 or .2 file (most recent first)
+# 🔍 Find latest file (newest marginalpdbc_*.1 or *.2)
 files = sorted(
     glob(os.path.join(data_folder, "marginalpdbc_*.1")) +
     glob(os.path.join(data_folder, "marginalpdbc_*.2")),
@@ -22,11 +22,11 @@ if not files:
     print("⚠️ No OMIE files found in 'data/'. Exiting.")
     sys.exit(0)
 
-# ✅ Pick the newest one
+# ✅ Pick newest
 new_file = files[0]
-print(f"📄 Selected OMIE file: {new_file}")
+print(f"📄 Using latest file: {new_file}")
 
-# 🧼 Clean it
+# 🧼 Clean file function
 def clean_file(filepath):
     df = pd.read_csv(filepath, sep=";", skiprows=1, header=None)
     df = df[~df.apply(lambda x: x.astype(str).str.contains(r"\*").any(), axis=1)]
@@ -36,6 +36,7 @@ def clean_file(filepath):
     df["Country"] = "Spain" if filepath.endswith(".1") else "Portugal"
     return df
 
+# 📊 Clean new data
 new_df = clean_file(new_file)
 
 # 🧠 Merge with Parquet
@@ -47,30 +48,22 @@ if os.path.exists(parquet_path):
 else:
     combined = new_df
 
-# 💾 Save CSV and Parquet
+# 💾 Save all formats
 combined.to_parquet(parquet_path, index=False)
 combined.to_csv(os.path.join(output_folder, "all_omie_prices.csv"), index=False)
 
-# 🦆 DuckDB
+# 🦆 Save to DuckDB
 duckdb_path = os.path.join(output_folder, "omie_prices.duckdb")
 con = duckdb.connect(duckdb_path)
-con.register("new_data", new_df)
+con.register("df", combined)
 
-# Ensure table exists
-con.execute("""
-    CREATE TABLE IF NOT EXISTS prices AS 
-    SELECT * FROM new_data LIMIT 0
-""")
-
-# Insert only new rows
-con.execute("""
-    INSERT INTO prices
-    SELECT * FROM new_data
-    EXCEPT
-    SELECT * FROM prices
-""")
-
+# Rebuild DuckDB table
+con.execute("DROP TABLE IF EXISTS prices")
+con.execute("CREATE TABLE prices AS SELECT * FROM df")
 con.close()
-print("✅ Done: OMIE data appended to all formats.")
+
+print("✅ Parquet, CSV, and DuckDB updated!")
+print(f"🕒 Latest date: {combined['Datetime'].max()}")
+
 
 
