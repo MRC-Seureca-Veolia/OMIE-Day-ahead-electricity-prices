@@ -3,10 +3,12 @@ import sys
 import pandas as pd
 import duckdb
 
-# 🔧 Paths
+# 📂 Paths
 new_file = "data/MARGINALPDBC.1"
 output_folder = "processed"
 os.makedirs(output_folder, exist_ok=True)
+
+print("🚀 Starting OMIE append script...")
 
 # 🚫 Skip if no new file
 if not os.path.exists(new_file):
@@ -15,6 +17,7 @@ if not os.path.exists(new_file):
 
 # 🧼 Clean function
 def clean_file(filepath):
+    print(f"📂 Cleaning new OMIE file: {filepath}")
     df = pd.read_csv(filepath, sep=";", skiprows=1, header=None)
     df = df[~df.apply(lambda x: x.astype(str).str.contains(r'\*').any(), axis=1)]
     df = df.drop(columns=[6])
@@ -23,22 +26,24 @@ def clean_file(filepath):
     df["Country"] = "Spain" if filepath.endswith(".1") else "Portugal"
     return df
 
-# ✅ Clean new file
+# ✅ Clean and prepare
 new_df = clean_file(new_file)
 
-# 📁 Parquet logic
+# 🧠 Remove duplicates based on Datetime + Country
 parquet_path = os.path.join(output_folder, "all_omie_prices.parquet")
 if os.path.exists(parquet_path):
     existing = pd.read_parquet(parquet_path)
-    combined = pd.concat([existing, new_df]).drop_duplicates(subset=["Datetime", "Country"]).sort_values(["Datetime", "Country"])
+    combined = pd.concat([existing, new_df])
+    combined = combined.drop_duplicates(subset=["Datetime", "Country"]).sort_values(["Datetime", "Country"])
 else:
     combined = new_df
 
 # 💾 Save updated Parquet
 combined.to_parquet(parquet_path, index=False)
 print(f"✅ Parquet updated: {parquet_path}")
+print(f"🕒 Latest timestamp: {combined['Datetime'].max()}")
 
-# 🦆 DuckDB logic
+# 🦆 DuckDB update
 duckdb_path = os.path.join(output_folder, "omie_prices.duckdb")
 con = duckdb.connect(duckdb_path)
 
@@ -61,4 +66,5 @@ con.execute("""
 
 con.close()
 print(f"✅ DuckDB updated: {duckdb_path}")
-print("✅ New data appended to Parquet and DuckDB.")
+print("🎉 New data appended to both Parquet and DuckDB.")
+
