@@ -2,10 +2,10 @@ name: Download and Process OMIE Prices
 
 on:
   schedule:
-    - cron: '0 18 * * *'   # Main run after OMIE releases
-    - cron: '0 20 * * *'   # Redundant run
-    - cron: '0 22 * * *'   # Backup
-    - cron: '0 23 * * *'   # Final fallback
+    - cron: '0 18 * * *'
+    - cron: '0 20 * * *'
+    - cron: '0 22 * * *'
+    - cron: '0 23 * * *'
   workflow_dispatch:
 
 jobs:
@@ -24,29 +24,28 @@ jobs:
       - name: 📦 Install dependencies
         run: pip install pandas duckdb requests pyarrow
 
-      - name: 📅 Download OMIE data (.1 then .2)
-        run: |
-          python download_tomorrow.py
+      - name: 🧲 Download OMIE data (.1 then .2)
+        run: python download_tomorrow.py
 
-      - name: 🧠 Select best OMIE file (prefer .2 over .1)
+      - name: 🧠 Select best file and rename
         run: |
           FILE=$(ls -t data/marginalpdbc_*.2 data/marginalpdbc_*.1 2>/dev/null | head -n 1)
-          echo "✅ Using file: $FILE"
+          echo "📄 Using file: $FILE"
           cp "$FILE" data/MARGINALPDBC.1
 
       - name: ➕ Append new day to database
-        run: |
-          python append_new_day.py
+        run: python append_new_day.py
 
-      - name: 🕵️ Show latest timestamp in parquet
+      - name: 💾 Show latest timestamp
         run: |
-          python -c "import pandas as pd; df = pd.read_parquet('processed/all_omie_prices.parquet'); print('🕒 Latest:', df['Datetime'].max())"
+          python -c "import pandas as pd; df = pd.read_parquet('processed/all_omie_prices.parquet'); print('🕒 Latest in DB:', df['Datetime'].max())"
 
-      - name: 🚀 Commit & Push all updates
+      - name: 🚀 Commit and push updates
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
           git pull --rebase origin main || true
-          git add -A   # 🔁 Add all new/modified/untracked files
-          git commit -m '📊 Update OMIE processed files' || echo 'No changes to commit'
-          git push || echo 'Nothing to push'
+          git add -A
+          git commit -m "📊 Update OMIE processed files" || echo "Nothing to commit"
+          git push || echo "Nothing to push"
+
